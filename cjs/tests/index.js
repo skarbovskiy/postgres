@@ -1789,6 +1789,32 @@ t('Recreate prepared statements on RevalidateCachedQuery error', async() => {
   ]
 })
 
+t('Properly throws routine error on not prepared statements', async() => {
+  await sql`create table x (x text[])`
+  const { routine } = await sql.unsafe(`
+    insert into x(x) values (('a', 'b'))
+  `).catch(e => e)
+
+  return ['transformAssignedExpr', routine, await sql`drop table x`]
+})
+
+t('Properly throws routine error on not prepared statements in transaction', async() => {
+  const { routine } = await sql.begin(sql => [
+    sql`create table x (x text[])`,
+    sql`insert into x(x) values (('a', 'b'))`
+  ]).catch(e => e)
+
+  return ['transformAssignedExpr', routine]
+})
+
+t('Properly throws routine error on not prepared statements using file', async() => {
+  const { routine } = await sql.unsafe(`
+    create table x (x text[]);
+    insert into x(x) values (('a', 'b'));
+  `, { prepare: true }).catch(e => e)
+
+  return ['transformAssignedExpr', routine]
+})
 
 t('Catches connection config errors', async() => {
   const sql = postgres({ ...options, user: { toString: () => { throw new Error('wat') } }, database: 'prut' })
@@ -2134,7 +2160,7 @@ t('Execute', async() => {
 
 t('Cancel running query', async() => {
   const query = sql`select pg_sleep(2)`
-  setTimeout(() => query.cancel(), 200)
+  setTimeout(() => query.cancel(), 500)
   const error = await query.catch(x => x)
   return ['57014', error.code]
 })
@@ -2348,6 +2374,17 @@ t('Ensure reconnect after max_lifetime with transactions', { timeout: 5 }, async
   return [true, true]
 })
 
+
+t('Ensure transactions throw if connection is closed dwhile there is no query', async() => {
+  const sql = postgres(options)
+  const x = await sql.begin(async() => {
+    setTimeout(() => sql.end({ timeout: 0 }), 10)
+    await new Promise(r => setTimeout(r, 200))
+    return sql`select 1`
+  }).catch(x => x)
+  return ['CONNECTION_CLOSED', x.code]
+})
+
 t('Custom socket', {}, async() => {
   let result
   const sql = postgres({
@@ -2530,5 +2567,16 @@ t('reserve connection', async() => {
   return [
     '123',
     xs.map(x => x.x).join('')
+  ]
+})
+
+t('arrays in reserved connection', async() => {
+  const reserved = await sql.reserve()
+  const [{ x }] = await reserved`select array[1, 2, 3] as x`
+  reserved.release()
+
+  return [
+    '123',
+    x.join('')
   ]
 })

@@ -8,8 +8,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ['12', '14', '16', '18', '20']
-        postgres: ['12', '13', '14', '15', '16']
+        node: ['12', '14', '16', '18', '20', '21', '22']
+        postgres: ['12', '13', '14', '15', '16', '17']
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -25,7 +25,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: |
           date
           sudo apt purge postgresql-14
@@ -48,7 +48,7 @@ jobs:
       - uses: denoland/setup-deno@v1
         with:
           deno-version: v1.x
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
       - run: npm test
